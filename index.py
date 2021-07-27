@@ -1,6 +1,7 @@
 import requests
 import os
 import time
+import json
 
 def handler(event,context):
     # For cookies and error handling
@@ -11,11 +12,9 @@ def handler(event,context):
 
 
     #  Login
-    login_data = {
-        "login[email]": os.getenv("USERNAME"),
-        "login[password]": os.getenv("PASSWORD")
-    }
-    login_response = session.post("https://login.newrelic.com/login", data = login_data)
+    # irritating hack because of SSL
+    login_cookies = dict(login_service_login_newrelic_com_tokens="%7B%22token%22%3A+%22K22BZdbtrckArzJqjwEse8XEcjYkae2r8%2B5xouG2OXG2%2Bqr57e2aZawq0%2FoXL9Y0HWADxZK8PtInYMK3ew8gdoxXB5Bnen3ib%2Fv0BFUzObUSRoUpWdleV2atoDWMfctCz3cXf1402v68r%2BuZ0K0Z%2Fxah8MRo0eR6il%2Bm9A2ARC2PCQC%2F%2BZpGMOpXfxEl35MZNi%2BhwOHq9kwMJWLOOYu%2BuJtSlKbb%2BzihGExN9%2Fm2MG0hn%2FWBUW2uw3Ixj0SzJ5KZyuAYCkg%2FR8qos5m%2Bgw5q7dMfa5Cwywto1goDk3ZWm03Nle0CQK13Diaw9atjhAnlcwTxphEIOdHXZrgZNV08XQ%3D%3D%22%2C+%22refresh_token%22%3A+%22PPiKl9am3OoviqibjLIRhyqoh7Z%2B7TDBdroGdvPVRH%2FlFLrWCG1quJQbYhdSw0VS5LsnqrdmSKVmD3QDkeo%2FKfhZjVI7TUJ4nK8cO3gTgPOdhEdlmh5%2Bkp151jQk5ek5rbSwfqbGbMyWMj5HCQ7Xwc%2BzMUqJCXjl02spFMvwfYSxrbhXSS0WOOsVZA55C1BXWsfoTNdFDPCNWzLIu4q2jyrXlQnlZm3d6%2B2RQ6v1l8s3oy0TeVxEt30jgLvY2%2FpfZynjgqeCGPPEQNszrquZUEoRn6x0rcPTaF5C3Whgryh5C%2FheVSOqpjYL1GawQH0KV%2BZVIX2wYq%2B1Y5M9y0wxsA%3D%3D%22%7D")
+    login_response = session.post("https://login.newrelic.com/login", cookies = login_cookies)
     
     custom_headers = {
         "X-Requested-With": "XMLHttpRequest",
@@ -23,7 +22,7 @@ def handler(event,context):
     }
 
     # Get users
-    users_response = session.get(f"https://user-management.service.newrelic.com/accounts/{os.getenv('ACCOUNT_ID')}/users",  headers=custom_headers)
+    users_response = session.get(f"https://user-management.service.newrelic.com/accounts/{os.getenv('ACCOUNT_ID')}/users",  headers=custom_headers, cookies=login_cookies)
     
     # Determine which users need to be switched back to basic
     switch_to_basic = []
@@ -39,6 +38,7 @@ def handler(event,context):
         print(f"Switching {str(user_id)} back to basic")
         update_response = session.put(f"https://rpm.newrelic.com/user_management/accounts/{os.getenv('ACCOUNT_ID')}/users/{user_id}",
           headers=custom_headers,
+          cookies=login_cookies,
           json={
               "account_view":{
                   "user_tier_id":1

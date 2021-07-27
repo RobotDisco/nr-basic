@@ -20,7 +20,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties: 
       Description: "NRBasic"
-      ScheduleExpression: "rate(5 minutes)"
+      ScheduleExpression: "rate(1 minute)"
       State: "ENABLED"
       Targets: 
         - Arn: !GetAtt LambdaFunction.Arn
@@ -52,11 +52,9 @@ Resources:
 
 
               #  Login
-              login_data = {
-                  "login[email]": os.getenv("USERNAME"),
-                  "login[password]": os.getenv("PASSWORD")
-              }
-              login_response = session.post("https://login.newrelic.com/login", data = login_data)
+              # irritating hack because of SSL
+              login_cookies = dict(login_service_login_newrelic_com_tokens="%7B%22token%22%3A+%22LR8u3n%2FFt9cTigQg9tSgZPBv0L96ObinWQV%2FbRYGVleP7AQa215VrUNwJmTWOYtHRdXcntotoIah11cvbtfpD%2Bc%2BmJ4mp74vlMhI6LqAKzgQgEyCW03fhonF4AqTocbEo3V%2B1m8AqxzmxdAFlhKDV4pHFsutJbIXU5%2Fw1ISmgD%2BmpTEwFJZgAIRuIVlCbJpSttwdlrrNc0KcEU1s1KyVM3h8%2F28f64EKdI%2BgN6jIslyq9uHb3%2BVSBISkZW75CfFuqPRbDm8845T5ueL0RE5Zy4HrbUG4Iv5tXVRdP6K2qQDlxOkUM%2FXOZkxQMDRdYGJjg1O%2FOCN55wpMh59Pr%2BO7HA%3D%3D%22%2C+%22refresh_token%22%3A+%22IPsewoLmZNkGAcPAZE996feSgu%2FOz2Lg4RQ5ubSImPyHoZNy59ooy1leuOI3kZXym9uERkB3O0IegCQWCe%2BLuQ24VIvLqo7H32xcjuSFkrITbnhxITnI5SlfL32YdkGuy3hl8H%2BBX6cPGlHMxzAfEI8YDRTdWwQt%2BocE19A9yvpOupoFOXXkT0n9CoGSjymdWYlo8NH2frZvJJaaEjVKBOrhotAzIR2dR7Zn5IsPTZYE%2F7lQ2eMtu5JFwuo7isPYImNmLYO3BRHHJov8%2Fe2IoMQsCFNpr%2Bzo5VctTR6pUDCvAppRkInoFxVo3QnJCXksozvEotNuLzNm96lAxb04og%3D%3D%22%7D")
+              #login_response = session.post("https://login.newrelic.com/login", cookies=login_cookies)
               
               custom_headers = {
                   "X-Requested-With": "XMLHttpRequest",
@@ -64,7 +62,7 @@ Resources:
               }
 
               # Get users
-              users_response = session.get(f"https://user-management.service.newrelic.com/accounts/{os.getenv('ACCOUNT_ID')}/users",  headers=custom_headers)
+              users_response = session.get(f"https://user-management.service.newrelic.com/accounts/{os.getenv('ACCOUNT_ID')}/users",  headers=custom_headers, cookies=login_cookies)
               
               # Determine which users need to be switched back to basic
               switch_to_basic = []
@@ -75,17 +73,22 @@ Resources:
                           if user['last_access_at'] + int(os.getenv("TIMEOUT")) < time.time(): # check if the last access + timeout is less than the current timestamp
                               switch_to_basic.append(user['user_id'])
 
+              custom_headers['Content-Type'] = 'application/json'
+                              
               # Update accounts
               for user_id in switch_to_basic:
                   print(f"Switching {str(user_id)} back to basic")
-                  update_response = session.put(f"https://rpm.newrelic.com/user_management/accounts/{os.getenv('ACCOUNT_ID')}/users/{user['user_id']}",
+                  update_response = requests.Session().put(f"https://rpm.newrelic.com/user_management/accounts/{os.getenv('ACCOUNT_ID')}/users/{user['user_id']}",
                     headers=custom_headers,
-                    json={
-                        "account_view":{
-                            "user_tier_id":1
-                        }
+                    cookies=login_cookies,
+                    json = {
+                      'account_view': {
+                        'user_tier_id': 1
                       }
+                    }  
                   )
+
+                  print(update_response)
           if __name__ == "__main__":
               handler({},{})
       Environment:
